@@ -66,11 +66,13 @@ jobs:
         uses: actions/checkout@v7.0.1
 
       - name: Get Allure history
-        uses: actions/checkout@v7.0.1
         continue-on-error: true
-        with:
-          ref: gh-pages
-          path: gh-pages
+        run: |
+          mkdir -p gh-pages
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            git fetch --depth=1 origin gh-pages
+            git archive FETCH_HEAD | tar -x -C gh-pages
+          fi
 
       - name: Download Allure results
         uses: actions/download-artifact@v7.0.0
