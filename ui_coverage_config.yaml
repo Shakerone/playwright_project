@@ -1,0 +1,14 @@
+apps:
+  - key: ui-course
+    name: UI Course
+    url: https://nikita-filonov.github.io/qa-automation-engineer-ui-course/#/auth/login
+    tags:
+      - UI
+      - COURSES
+    repository: https://github.com/Nikita-Filonov/qa-automation-engineer-ui-course
+
+results_dir: ./coverage-results
+history_file: ./coverage-history.json
+history_retention_limit: 30
+html_report_file: ./coverage.html
+json_report_file: ./coverage-report.json

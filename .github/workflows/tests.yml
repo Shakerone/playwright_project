@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ui-tests-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   run-tests:
     runs-on: ubuntu-latest
@@ -37,13 +41,65 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install dependencies
+        id: dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
+      - name: Check element coverage tracking
+        run: python -m pytest tests/coverage --quiet
+
       - name: Run Playwright tests
         run: python -m pytest -m regression --alluredir=allure-results --numprocesses 2
+
+      - name: Restore UI coverage history
+        if: always() && steps.dependencies.outcome == 'success'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: coverage-history.json
+          key: coverage-history-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            coverage-history-${{ runner.os }}-${{ github.ref_name }}-
+            coverage-history-${{ runner.os }}-main-
+
+      - name: Generate UI coverage report
+        id: coverage
+        if: always() && steps.dependencies.outcome == 'success'
+        run: |
+          ui-coverage-tool save-report
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          assert Path("coverage.html").stat().st_size > 0, "Empty coverage HTML report"
+          report = json.loads(Path("coverage-report.json").read_text())
+          history = json.loads(Path("coverage-history.json").read_text())
+          elements = report["appsCoverage"]["ui-course"]["elements"]
+          entries = history["apps"]["ui-course"]["total"]
+          assert elements, "No UI coverage collected during tests"
+          assert entries, "No coverage history saved"
+          print(f"UI coverage: {len(elements)} elements; {len(entries)} history entries")
+          PY
+
+      - name: Save UI coverage history
+        if: always() && steps.coverage.outcome == 'success' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: coverage-history.json
+          key: coverage-history-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload UI coverage report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: coverage-report
+          path: |
+            coverage.html
+            coverage-report.json
+            coverage-history.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload Allure results
         if: always()

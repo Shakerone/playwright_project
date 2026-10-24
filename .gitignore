@@ -18,3 +18,9 @@ tracing/
 # Local configuration and secrets
 .env
 .pytest_cache/
+
+# UI coverage reports
+coverage-results/
+coverage.html
+coverage-report.json
+coverage-history.json

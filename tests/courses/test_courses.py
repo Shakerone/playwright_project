@@ -55,6 +55,7 @@ class TestCourses:
             max_score="100",
             min_score="10"
         )
+        create_course_page.create_course_toolbar_view.check_visible(is_create_course_disabled=False)
         create_course_page.create_course_toolbar_view.click_create_course_button()
 
         courses_list_page.toolbar_view.check_visible()
