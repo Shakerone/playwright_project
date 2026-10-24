@@ -71,7 +71,11 @@ jobs:
           mkdir -p gh-pages
           if git ls-remote --exit-code --heads origin gh-pages; then
             git fetch --depth=1 origin gh-pages
-            git archive FETCH_HEAD | tar -x -C gh-pages
+            if git cat-file -e FETCH_HEAD:index.html 2>/dev/null; then
+              git archive FETCH_HEAD | tar -x -C gh-pages
+            else
+              echo "No published report found; starting with empty Allure history."
+            fi
           fi
 
       - name: Download Allure results
