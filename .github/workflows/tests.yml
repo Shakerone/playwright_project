@@ -84,13 +84,57 @@ jobs:
           name: allure-results
           path: allure-results
 
+      - name: Install Allure CLI
+        env:
+          ALLURE_VERSION: "2.44.0"
+        run: |
+          java -version
+          curl --fail --location --retry 3 \
+            "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz" \
+            --output "$RUNNER_TEMP/allure.tgz"
+          tar -xzf "$RUNNER_TEMP/allure.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/allure-${ALLURE_VERSION}/bin" >> "$GITHUB_PATH"
+
       - name: Generate Allure report with history
-        uses: simple-elf/allure-report-action@v1.15
-        with:
-          allure_results: allure-results
-          allure_report: allure-report
-          gh_pages: gh-pages
-          allure_history: allure-history
+        run: |
+          mkdir -p allure-history
+          cp -R gh-pages/. allure-history/
+          if [ -d gh-pages/last-history ]; then
+            mkdir -p allure-results/history
+            cp -R gh-pages/last-history/. allure-results/history/
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          owner, repository = os.environ["GITHUB_REPOSITORY"].split("/")
+          pages_url = f"https://{owner.lower()}.github.io/{repository}"
+          run_id = os.environ["GITHUB_RUN_ID"]
+          run_number = os.environ["GITHUB_RUN_NUMBER"]
+          executor = {
+              "name": "GitHub Actions",
+              "type": "github",
+              "reportName": "Allure Report with history",
+              "url": pages_url,
+              "reportUrl": f"{pages_url}/{run_number}/",
+              "buildUrl": f"{os.environ['GITHUB_SERVER_URL']}/{owner}/{repository}/actions/runs/{run_id}",
+              "buildName": f"GitHub Actions Run #{run_number}",
+              "buildOrder": int(run_number),
+          }
+          Path("allure-results/executor.json").write_text(
+              json.dumps(executor), encoding="utf-8"
+          )
+          PY
+          allure generate allure-results --clean -o allure-report
+          mkdir -p "allure-history/${GITHUB_RUN_NUMBER}"
+          cp -R allure-report/. "allure-history/${GITHUB_RUN_NUMBER}/"
+          if [ -d allure-report/history ]; then
+            mkdir -p allure-history/last-history
+            cp -R allure-report/history/. allure-history/last-history/
+          fi
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=./%s/index.html">\n' \
+            "$GITHUB_RUN_NUMBER" > allure-history/index.html
 
       - name: Deploy report to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4.1.0
