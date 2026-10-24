@@ -1,0 +1,93 @@
+name: UI tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: ${{ vars.APP_URL }}
+      HEADLESS: "true"
+      BROWSERS: '["chromium"]'
+      TEST_USER.EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+      TEST_USER.USERNAME: ${{ secrets.TEST_USER_USERNAME }}
+      TEST_USER.PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      TEST_DATA.IMAGE_PNG_FILE: testdata/files/image.png
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: python -m pytest -m regression --alluredir=allure-results --numprocesses 2
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: allure-results
+          path: allure-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish-report:
+    needs: run-tests
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Get Allure history
+        uses: actions/checkout@v7.0.1
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Download Allure results
+        uses: actions/download-artifact@v7.0.2
+        with:
+          name: allure-results
+          path: allure-results
+
+      - name: Generate Allure report with history
+        uses: simple-elf/allure-report-action@v1.15
+        with:
+          allure_results: allure-results
+          allure_report: allure-report
+          gh_pages: gh-pages
+          allure_history: allure-history
+
+      - name: Deploy report to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
